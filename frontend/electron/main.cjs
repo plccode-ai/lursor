@@ -15,7 +15,7 @@ const { spawn, execFile } = require("node:child_process")
 const { app, BrowserWindow, nativeImage, shell, ipcMain, dialog } = require("electron")
 
 const isDev = !app.isPackaged
-const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL || "http://localhost:8888"
+const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL || "http://localhost:8899"
 // DevTools only auto-open when explicitly asked for (./scripts/dev.sh --electron --debug).
 const OPEN_DEVTOOLS = process.env.LURSOR_DEVTOOLS === "1"
 const PREFERRED_PORT = 8791

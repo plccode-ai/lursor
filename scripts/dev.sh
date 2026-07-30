@@ -16,7 +16,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 FRONTEND_CMD="dev"
-FRONTEND_LABEL="frontend on :8888"
+FRONTEND_LABEL="frontend on :8899"
 ELECTRON=0
 DEBUG=0
 
@@ -30,7 +30,7 @@ done
 
 if [[ "$ELECTRON" == "1" ]]; then
   FRONTEND_CMD="electron:dev"
-  FRONTEND_LABEL="frontend (Electron) — Vite on :8888"
+  FRONTEND_LABEL="frontend (Electron) — Vite on :8899"
 fi
 
 # Electron's main process reads this to decide whether to auto-open DevTools.

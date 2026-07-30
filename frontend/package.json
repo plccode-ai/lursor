@@ -16,7 +16,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "electron": "electron .",
-    "electron:dev": "concurrently -k -n vite,electron -c cyan,magenta \"vite\" \"wait-on tcp:8888 && cross-env VITE_DEV_SERVER_URL=http://localhost:8888 electron .\"",
+    "electron:dev": "concurrently -k -n vite,electron -c cyan,magenta \"vite\" \"wait-on tcp:8899 && cross-env VITE_DEV_SERVER_URL=http://localhost:8899 electron .\"",
     "bundle:backend": "bash ../backend/scripts/build_bundle.sh ../backend/bundle",
     "electron:build": "npm run bundle:backend && tsc -b && vite build && electron-builder",
     "electron:build:mac": "npm run bundle:backend && tsc -b && vite build && electron-builder --mac",
