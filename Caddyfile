@@ -1,0 +1,25 @@
+# Single-origin front for the Lursor container: serve the built SPA and
+# reverse-proxy the API (and its WebSocket upgrades — terminal, preview, file,
+# git watchers) to the FastAPI backend on localhost. One listener, one port.
+#
+# TLS is terminated upstream (Cloudflare / the tunnel), so listen plain on :8080.
+{
+	admin off
+	auto_https off
+}
+
+:8080 {
+	encode zstd gzip
+
+	# API + WebSockets → backend. Caddy upgrades WS transparently on reverse_proxy.
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8791
+	}
+
+	# SPA: serve static assets, fall back to index.html for client-side routes.
+	handle {
+		root * /srv/www
+		try_files {path} /index.html
+		file_server
+	}
+}
