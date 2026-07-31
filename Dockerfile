@@ -56,6 +56,14 @@ FROM python:3.12-slim-bookworm
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git ca-certificates tini && rm -rf /var/lib/apt/lists/*
 COPY --from=caddy:2 /usr/bin/caddy /usr/local/bin/caddy
+# The upstream caddy binary ships with a file capability (cap_net_bind_service).
+# Under our per-instance hardening (cap_drop=ALL + no-new-privileges) the kernel
+# refuses to exec a binary that requests file caps ("Operation not permitted").
+# We bind :8080 (no privileged port), so strip the xattr by copying without it.
+RUN cp /usr/local/bin/caddy /usr/local/bin/caddy.stripped \
+ && rm /usr/local/bin/caddy \
+ && mv /usr/local/bin/caddy.stripped /usr/local/bin/caddy \
+ && chmod 0755 /usr/local/bin/caddy
 
 # Backend (venv lives at /app/backend/.venv — same path as build, so shebangs work).
 COPY --from=backend /app/backend /app/backend

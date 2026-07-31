@@ -1,0 +1,31 @@
+# Local bring-up of the orchestrator. In production, cloudflared points its
+# ingress at this service and Cloudflare Access sits in front (set
+# ORCH_ACCESS_TEAM_DOMAIN / ORCH_ACCESS_AUD and REMOVE ORCH_DEV_TRUST_HEADER).
+services:
+  orchestrator:
+    build: .
+    image: lursor-orchestrator:dev
+    container_name: lursor-orchestrator
+    ports:
+      # Host port overridable (ORCH_HOST_PORT) for machines where 9000 is taken.
+      - "${ORCH_HOST_PORT:-9000}:9000"
+    environment:
+      # LOCAL DEV ONLY: trust an unverified email header instead of a CF Access JWT.
+      ORCH_DEV_TRUST_HEADER: "1"
+      ORCH_INSTANCE_IMAGE: "lursor:dev"
+      ORCH_DOCKER_NETWORK: "lursor-net"
+      ORCH_CONTROL_TOKEN: "dev-control-token"
+      ORCH_IDLE_TIMEOUT_S: "1200"
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
+    volumes:
+      # Raw socket for local dev; use a socket-proxy in prod.
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - lursor-net
+    restart: unless-stopped
+
+networks:
+  # Shared with every per-user Lursor container so the orchestrator can reach
+  # them by name. `name:` pins the real network name the manager attaches to.
+  lursor-net:
+    name: lursor-net
