@@ -1,0 +1,16 @@
+# Keep the build context small and reproducible — deps are installed in-image
+# from lockfiles, and per-instance state must never be baked in.
+.git
+**/node_modules
+frontend/dist
+frontend/build
+frontend/release
+backend/.venv
+backend/lursor.db
+backend/lursor.db-*
+backend/.env
+**/__pycache__
+**/*.pyc
+.env
+*.log
+.DS_Store

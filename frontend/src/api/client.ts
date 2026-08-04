@@ -6,22 +6,35 @@ function resolveApiBase(): string {
     typeof window !== "undefined" ? window.electron?.apiBase : undefined
   if (fromElectron) return fromElectron
 
-  const configured =
-    (import.meta.env.VITE_API_BASE as string | undefined) ??
-    "http://localhost:8791/api"
+  const configured = import.meta.env.VITE_API_BASE as string | undefined
 
-  // When the app is opened from another device over the LAN (e.g. a phone at
-  // http://192.168.x.x:8888), a hardcoded `localhost` would resolve to that
-  // device instead of the machine running the API. Talk to the API on whichever
-  // host served the page, port 8791. Localhost and Electron (file://) fall
-  // through to the configured value unchanged.
+  // Single-origin server deployment (this fork's container image): the SPA and
+  // the API are served from one origin, a reverse proxy forwards /api to the
+  // backend. Build with VITE_API_BASE="same-origin" and the base is derived from
+  // the page origin at runtime — an ABSOLUTE URL (the WebSocket helpers call
+  // `new URL()` on it, so it must be absolute) that works behind ANY hostname
+  // (Cloudflare, per-tenant subdomains) with no rebuild. wss:// is derived from
+  // the https page automatically.
+  if (configured === "same-origin") {
+    return typeof window !== "undefined" ? `${window.location.origin}/api` : "/api"
+  }
+
+  // An explicit absolute VITE_API_BASE wins as-is (no LAN rewrite below).
+  if (configured) return configured
+
+  // Dev default: no VITE_API_BASE. The Vite dev server (:8899) and the API
+  // (:8791) are separate origins. When the app is opened from another device
+  // over the LAN (e.g. a phone at http://192.168.x.x:8899), a hardcoded
+  // `localhost` would resolve to that device instead of the machine running the
+  // API. Talk to the API on whichever host served the page, port 8791. Localhost
+  // and Electron (file://) fall through to the localhost default.
   if (typeof window !== "undefined" && window.location.protocol.startsWith("http")) {
     const host = window.location.hostname
     if (host !== "localhost" && host !== "127.0.0.1") {
       return `${window.location.protocol}//${host}:8791/api`
     }
   }
-  return configured
+  return "http://localhost:8791/api"
 }
 
 export const API_BASE: string = resolveApiBase()

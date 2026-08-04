@@ -28,8 +28,15 @@ class Settings(BaseSettings):
     # --- Server ---
     app_name: str = "Lursor"
     debug: bool = True
-    # Origins allowed to call the API (the Vite dev server by default).
-    cors_origins: list[str] = ["http://localhost:8888", "http://127.0.0.1:8888"]
+    # Origins allowed to call the API (the Vite dev server by default). This fork
+    # serves its dev UI on :8899 (moved off upstream's :8888 to coexist with the
+    # PLCcode admin app); :8888 kept for upstream parity.
+    cors_origins: list[str] = [
+        "http://localhost:8899",
+        "http://127.0.0.1:8899",
+        "http://localhost:8888",
+        "http://127.0.0.1:8888",
+    ]
 
     # --- Data root ---
     # When set (env ``LURSOR_DATA_DIR``), every on-disk path that isn't explicitly
