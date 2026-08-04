@@ -1,0 +1,13 @@
+{
+  "name": "lursor-repo",
+  "private": true,
+  "description": "Repo-root task shims — the real work lives in scripts/dev.sh, backend/, and frontend/",
+  "scripts": {
+    "dev": "./scripts/dev.sh",
+    "dev:electron": "./scripts/dev.sh --electron",
+    "dev:debug": "./scripts/dev.sh --electron --debug",
+    "test": "cd backend && uv run pytest",
+    "lint": "cd backend && uv run ruff check app tests && cd ../frontend && bun run lint",
+    "build": "cd frontend && bun run build"
+  }
+}
