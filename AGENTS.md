@@ -51,6 +51,9 @@ scripts/          dev.sh, install.sh, update.sh
 ## 3. Commands
 
 ```bash
+pnpm dev                              # backend + frontend (npm/bun run dev work too)
+pnpm dev:electron [dev:debug]         # ... in the Electron shell
+# The root package.json is a dependency-free shim over these:
 ./scripts/dev.sh                      # backend + frontend
 ./scripts/dev.sh --electron [--debug] # ... in the Electron shell
 
@@ -62,7 +65,7 @@ uv run ruff check app tests
 
 cd frontend
 bun install                           # NOT pnpm — pnpm deadlocks in this environment
-bun run dev                           # :8888
+bun run dev                           # :8899
 bun run build                         # tsc -b && vite build
 bun run lint                          # oxlint
 ```

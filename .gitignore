@@ -24,6 +24,12 @@ node_modules/
 dist/
 *.local
 
+# Lockfiles from an accidental install at the repo root; the root package.json is
+# a dependency-free script shim. (frontend/bun.lock is tracked — hence the leading /.)
+/pnpm-lock.yaml
+/package-lock.json
+/bun.lock
+
 # Electron packaging output
 release/
 

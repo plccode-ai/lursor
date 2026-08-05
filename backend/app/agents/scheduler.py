@@ -23,9 +23,12 @@ due.** Laptop sleep, an NTP jump, or a slow tick can all leave a stale
 ``next_fire_at``; rolling forward from the current instant makes a late tick fire
 once instead of quietly catching up.
 
-Reload safety: ``uvicorn --reload`` and the Electron dev flow both run a single
-process with no workers, so exactly one scheduler exists. Adding ``--workers > 1``
-later would multiply this loop and would need a cross-process lock first.
+Reload safety: a due slot is **claimed** before any work happens (see
+:func:`claim`) — a compare-and-swap that moves ``next_fire_at`` forward and only
+lets the winner fire. That makes the tick safe against a second firing path (a
+hosted deployment wakes an idle instance to fire, so the wake and the local tick
+can both see the same row due) and against ``uvicorn --workers > 1``, which would
+otherwise multiply this loop into one launch per worker.
 """
 
 from __future__ import annotations
@@ -36,6 +39,7 @@ import logging
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -186,12 +190,65 @@ async def _is_previous_fire_live(session: AsyncSession, schedule_id: str) -> str
     return row.thread_id if chat_run_manager.is_running(row.thread_id) else None
 
 
-async def fire(session: AsyncSession, schedule: Schedule, *, now: datetime) -> ScheduleRun:
+async def claim(session: AsyncSession, schedule: Schedule, *, now: datetime) -> bool:
+    """Atomically take ownership of ``schedule``'s due slot. ``True`` if we won it.
+
+    A conditional update — "move ``next_fire_at`` forward, but only if it is still
+    the value I read" — so exactly one caller can act on a given slot. Whoever
+    loses sees ``rowcount == 0`` and must not fire.
+
+    This exists because firing is no longer single-sourced. A hosted deployment
+    reaps idle instances and wakes them shortly before a fire is due, so the wake
+    path and this process's own tick can both find the same row due within the
+    same second; without the swap that is two agent runs off one cron line. It is
+    also the cross-process lock ``uvicorn --workers > 1`` needs.
+
+    The slot rolls forward *before* the work rather than after, which also means a
+    fire that crashes outright still leaves the row not-due — the property
+    :func:`fire` documents, now guaranteed even if :func:`fire` never returns.
+    """
+    previous = schedule.next_fire_at
+    upcoming = compute_next_fire(schedule, after=now)
+    # ``previous`` is used exactly as it was loaded (never tz-normalized): the
+    # comparison has to match the stored representation byte for byte, and SQLite
+    # holds these as naive strings.
+    result = await session.execute(
+        update(Schedule)
+        .where(Schedule.id == schedule.id, Schedule.next_fire_at == previous)
+        .values(next_fire_at=upcoming, updated_at=now)
+    )
+    await session.commit()
+    if result.rowcount != 1:
+        logger.info(
+            "scheduler: lost the race for schedule %s (%s) — another firer has it",
+            schedule.id,
+            schedule.name,
+        )
+        return False
+    # ``expire_on_commit`` is False, so the in-memory row still holds the slot we
+    # just consumed. Sync it, or anything reading it back sees a stale clock.
+    schedule.next_fire_at = upcoming
+    schedule.updated_at = now
+    return True
+
+
+async def fire(
+    session: AsyncSession,
+    schedule: Schedule,
+    *,
+    now: datetime,
+    roll_forward: bool = True,
+) -> ScheduleRun:
     """Run one due schedule: open a conversation and launch it, or record why not.
 
     Always writes exactly one :class:`ScheduleRun` and always leaves
     ``next_fire_at`` in the future, whatever happened — a fire that failed must not
     stay due, or the loop would retry it every 30 seconds forever.
+
+    ``roll_forward=False`` says the caller already moved the clock (it claimed the
+    slot — see :func:`claim`) and this must not advance it a second time. The tick
+    passes False; "run now", which fires a schedule that was never due, keeps the
+    default and consumes the upcoming slot exactly as it always has.
     """
     # Import here: ``api.chat`` imports a good part of the agent stack, and the
     # scheduler is imported from ``main`` during app construction.
@@ -237,9 +294,10 @@ async def fire(session: AsyncSession, schedule: Schedule, *, now: datetime) -> S
             schedule.last_fired_at = now
 
     session.add(outcome)
-    # Forward from *now*, not from the slot that was due: a tick delayed past one
-    # or more occurrences then fires once rather than catching up silently.
-    schedule.next_fire_at = compute_next_fire(schedule, after=_now())
+    if roll_forward:
+        # Forward from *now*, not from the slot that was due: a tick delayed past
+        # one or more occurrences then fires once rather than catching up silently.
+        schedule.next_fire_at = compute_next_fire(schedule, after=_now())
     schedule.updated_at = now
     session.add(schedule)
     await session.commit()
@@ -249,9 +307,11 @@ async def fire(session: AsyncSession, schedule: Schedule, *, now: datetime) -> S
 async def tick() -> int:
     """One pass over the due schedules. Returns how many were acted on.
 
-    Each schedule is fired inside its own guard, so a row that blows up is logged
-    and recorded and the rest of the batch still runs. Exported (rather than buried
-    in the loop) so tests can drive it with a real database and no timers.
+    Each schedule is claimed before it is fired, so a slot another firer already
+    took is silently left alone and not counted. Each fire then runs inside its own
+    guard, so a row that blows up is logged and recorded and the rest of the batch
+    still runs. Exported (rather than buried in the loop) so tests can drive it with
+    a real database and no timers.
     """
     now = _now()
     async with async_session_factory() as session:
@@ -270,13 +330,18 @@ async def tick() -> int:
             .scalars()
             .all()
         )
+        fired = 0
         for schedule in due:
             try:
-                await fire(session, schedule, now=now)
+                if not await claim(session, schedule, now=now):
+                    # Another firer took this slot. Not ours, not an error.
+                    continue
+                fired += 1
+                await fire(session, schedule, now=now, roll_forward=False)
             except Exception:  # noqa: BLE001 — the tick task must be unkillable
                 logger.exception("scheduler: tick failed for schedule %s", schedule.id)
                 await session.rollback()
-    return len(due)
+    return fired
 
 
 async def _loop() -> None:

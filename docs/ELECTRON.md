@@ -47,7 +47,7 @@ Key wiring:
 ```bash
 cd frontend
 bun install
-bun run electron:dev     # starts Vite, waits for :8888, then launches Electron
+bun run electron:dev     # starts Vite, waits for :8899, then launches Electron
 ```
 
 Make sure the backend is running (`http://localhost:8791`).

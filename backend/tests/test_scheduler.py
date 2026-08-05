@@ -277,6 +277,52 @@ async def test_an_unusable_cron_parks_the_row_instead_of_wedging_the_loop(
     assert await scheduler.tick() == 0
 
 
+# --- claiming the slot ---------------------------------------------------------
+
+
+async def test_a_slot_can_only_be_claimed_once(client: AsyncClient, monkeypatch):
+    """The compare-and-swap that stops two firers acting on one cron line."""
+    _stub_launcher(monkeypatch)
+    row = await _make_schedule(client, "Contended")
+
+    async with async_session_factory() as first, async_session_factory() as second:
+        a = await first.get(Schedule, row.id)
+        b = await second.get(Schedule, row.id)
+        # Both readers saw the same due slot, exactly as two firers would.
+        assert a.next_fire_at == b.next_fire_at
+
+        now = datetime.now(UTC)
+        assert await scheduler.claim(first, a, now=now) is True
+        # The loser's ``next_fire_at`` no longer matches what is stored, so its
+        # conditional update touches nothing.
+        assert await scheduler.claim(second, b, now=now) is False
+
+    # And the winner's clock is the one that landed.
+    assert (await _reload(row.id)).next_fire_at.replace(tzinfo=UTC) > datetime.now(UTC)
+
+
+async def test_concurrent_ticks_launch_a_due_schedule_exactly_once(
+    client: AsyncClient, monkeypatch
+):
+    """Two firing paths racing on one due row must produce one agent run.
+
+    This is the scenario a hosted deployment creates: an idle instance is woken
+    shortly before a fire is due, so the wake and the instance's own tick can both
+    find the row due within the same second.
+    """
+    import asyncio
+
+    calls = _stub_launcher(monkeypatch)
+    row = await _make_schedule(client, "Raced")
+
+    results = await asyncio.gather(scheduler.tick(), scheduler.tick())
+
+    # Exactly one tick claimed the slot; the other found it already taken.
+    assert sorted(results) == [0, 1]
+    assert len(calls) == 1
+    assert [r.status for r in await _runs(row.id)] == [ScheduleFireStatus.launched]
+
+
 # --- the startup pass ----------------------------------------------------------
 
 

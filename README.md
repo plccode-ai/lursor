@@ -108,6 +108,15 @@ walkthrough, where your data lives, and how updates work.
 One command, both processes:
 
 ```bash
+pnpm dev                              # backend + frontend in the browser
+pnpm dev:electron                     # ... in the Electron desktop shell
+pnpm dev:debug                        # ... and auto-open Chrome DevTools
+```
+
+`npm run dev` and `bun run dev` work too — the root `package.json` has no
+dependencies, it just delegates to the script that does the work:
+
+```bash
 ./scripts/dev.sh                      # backend + frontend in the browser
 ./scripts/dev.sh --electron           # ... in the Electron desktop shell
 ./scripts/dev.sh --electron --debug   # ... and auto-open Chrome DevTools
@@ -129,7 +138,7 @@ cp .env.example .env      # VITE_API_BASE defaults to http://localhost:8791/api
 bun run dev
 ```
 
-Then open the Vite URL (default `http://localhost:8888`).
+Then open the Vite URL (default `http://localhost:8899`).
 [docs/ELECTRON.md](docs/ELECTRON.md) covers how the desktop app is wired and how to
 package a distributable.
 
